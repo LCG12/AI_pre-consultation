@@ -1,0 +1,68 @@
+[
+  {
+    "rule_id": "YELLOW_FEVER_3_DAYS",
+    "name": "发热持续3天及以上",
+    "condition": { "field": "slots.fever.duration_days", "operator": ">=", "value": 3 },
+    "risk_level": "yellow", "reason": "发热持续3天及以上"
+  },
+  {
+    "rule_id": "YELLOW_HIGH_FEVER",
+    "name": "最高体温39℃及以上",
+    "condition": { "field": "slots.fever.max_temperature_c", "operator": ">=", "value": 39 },
+    "risk_level": "yellow", "reason": "最高体温达到39℃及以上"
+  },
+  {
+    "rule_id": "YELLOW_OLDER_ADULT",
+    "name": "老人",
+    "condition": { "field": "patient_basic_info.age", "operator": ">=", "value": 65 },
+    "risk_level": "yellow", "reason": "年龄较大，建议尽快线下就医"
+  },
+  {
+    "rule_id": "YELLOW_CHILD",
+    "name": "儿童",
+    "condition": { "field": "patient_basic_info.age", "operator": "<", "value": 14 },
+    "risk_level": "yellow", "reason": "儿童，建议由医生进一步评估"
+  },
+  {
+    "rule_id": "YELLOW_PREGNANCY",
+    "name": "孕妇",
+    "condition": { "field": "patient_basic_info.pregnancy_status", "operator": "equals", "value": true },
+    "risk_level": "yellow", "reason": "孕期不适，建议尽快线下就医"
+  },
+  {
+    "rule_id": "YELLOW_ABDO_SEVERE",
+    "name": "重度腹痛",
+    "condition": { "field": "slots.abdominal_pain.severity", "operator": "equals", "value": "severe" },
+    "risk_level": "yellow", "reason": "重度腹痛，建议尽快就医评估"
+  },
+  {
+    "rule_id": "YELLOW_ABDO_LONG",
+    "name": "腹痛超过24小时",
+    "condition": { "field": "slots.abdominal_pain.duration_hours", "operator": "contains_any", "value": ["天", "日", "24"] },
+    "risk_level": "yellow", "reason": "腹痛时间较长，建议就医评估"
+  },
+  {
+    "rule_id": "YELLOW_ABDO_FEVER",
+    "name": "腹痛伴发热",
+    "condition": { "field": "slots.associated_symptoms.fever", "operator": "equals", "value": true },
+    "risk_level": "yellow", "reason": "腹痛伴有发热，需排除感染性急腹症"
+  },
+  {
+    "rule_id": "YELLOW_HEADACHE_SEVERE",
+    "name": "重度头痛",
+    "condition": { "field": "slots.headache.severity", "operator": "equals", "value": "severe" },
+    "risk_level": "yellow", "reason": "重度头痛，建议尽快就医评估"
+  },
+  {
+    "rule_id": "YELLOW_HEADACHE_LONG",
+    "name": "头痛超过72小时",
+    "condition": { "field": "slots.headache.duration_hours", "operator": ">=", "value": 72 },
+    "risk_level": "yellow", "reason": "头痛持续超过72小时，需排除严重病因"
+  },
+  {
+    "rule_id": "YELLOW_HEADACHE_DAILY",
+    "name": "每日头痛",
+    "condition": { "field": "slots.headache.frequency", "operator": "equals", "value": "daily" },
+    "risk_level": "yellow", "reason": "每日头痛，需警惕药物过度使用性头痛或慢性头痛"
+  }
+]

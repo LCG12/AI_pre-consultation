@@ -1,0 +1,52 @@
+{
+  "path_id": "fever_cough_v1",
+  "name": "发热咳嗽咽痛预问诊",
+  "max_turns": 5,
+  "required_slots": [
+    {
+      "key": "patient_basic_info.age",
+      "priority": 100,
+      "question_type": "basic"
+    },
+    {
+      "key": "slots.red_flags.shortness_of_breath",
+      "priority": 100,
+      "question_type": "red_flag"
+    },
+    {
+      "key": "slots.red_flags.chest_pain",
+      "priority": 100,
+      "question_type": "red_flag"
+    },
+    {
+      "key": "slots.red_flags.hemoptysis",
+      "priority": 100,
+      "question_type": "red_flag"
+    },
+    {
+      "key": "slots.fever.duration_days",
+      "priority": 90,
+      "question_type": "symptom"
+    },
+    {
+      "key": "slots.fever.max_temperature_c",
+      "priority": 90,
+      "question_type": "symptom"
+    },
+    {
+      "key": "slots.cough.cough_type",
+      "priority": 70,
+      "question_type": "symptom"
+    },
+    {
+      "key": "slots.allergy_history.has_allergy",
+      "priority": 50,
+      "question_type": "history"
+    },
+    {
+      "key": "slots.medication_history.has_used_medicine",
+      "priority": 50,
+      "question_type": "history"
+    }
+  ]
+}

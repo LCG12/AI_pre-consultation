@@ -1,0 +1,110 @@
+[
+  {
+    "rule_id": "RED_DYSPNEA",
+    "name": "呼吸困难",
+    "condition": { "field": "slots.red_flags.shortness_of_breath", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在呼吸困难", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_CHEST_PAIN",
+    "name": "胸痛",
+    "condition": { "field": "slots.red_flags.chest_pain", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在胸痛或明显胸闷", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_HEMOPTYSIS",
+    "name": "咳血",
+    "condition": { "field": "slots.red_flags.hemoptysis", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在咳血", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_CONFUSION",
+    "name": "意识异常",
+    "condition": { "field": "slots.red_flags.confusion", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在意识异常", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_SEIZURE",
+    "name": "抽搐",
+    "condition": { "field": "slots.red_flags.seizure", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在抽搐或惊厥", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_CYANOSIS",
+    "name": "嘴唇或面色发紫",
+    "condition": { "field": "slots.red_flags.cyanosis", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在嘴唇或面色发紫", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_PERITONEAL",
+    "name": "腹膜刺激征",
+    "condition": { "field": "slots.red_flags.peritoneal_signs", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在腹膜刺激征（腹部发硬、反跳痛），需排除急腹症", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_HEMATEMESIS",
+    "name": "呕血",
+    "condition": { "field": "slots.red_flags.hematemesis", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在呕血，需排除上消化道出血", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_MELENA",
+    "name": "黑便",
+    "condition": { "field": "slots.red_flags.melena", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在黑便，需排除消化道出血", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_SYNCOPE",
+    "name": "晕厥",
+    "condition": { "field": "slots.red_flags.syncope", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "存在晕厥，需立即排查循环障碍", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_THUNDERCLAP",
+    "name": "雷击样头痛",
+    "condition": { "field": "slots.headache.red_flags.thunderclap_onset", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "突然剧烈头痛（雷击样），需排除蛛网膜下腔出血", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_NEURO_SYMPTOMS",
+    "name": "头痛伴神经症状",
+    "condition": { "field": "slots.headache.red_flags.neuro_symptoms", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "头痛伴肢体无力/言语不清/复视，需排除脑血管意外", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_MENINGITIS",
+    "name": "头痛伴发热颈强",
+    "condition": { "field": "slots.headache.red_flags.fever_stiff_neck", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "头痛伴发热、颈部僵硬，需排除脑膜炎/脑炎", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_TRAUMA_ANTICOAG",
+    "name": "头外伤或抗凝",
+    "condition": { "field": "slots.headache.red_flags.trauma_anticoag", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "近期头部外伤或服用抗凝药，需排除颅内出血", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_NEW_ONSET_OVER_50",
+    "name": "50岁后新发头痛",
+    "condition": { "field": "slots.headache.red_flags.new_onset_over_50", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "50岁后新发头痛，需排除肿瘤、巨细胞动脉炎等继发性原因", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_WORSENING",
+    "name": "头痛进行性加重",
+    "condition": { "field": "slots.headache.red_flags.worsening_pattern", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "头痛进行性加重或模式改变，需排除继发性头痛", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_PREGNANCY_HEADACHE",
+    "name": "妊娠期头痛",
+    "condition": { "field": "slots.headache.red_flags.pregnancy_related", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "怀孕或产后新发头痛，需警惕血管性/垂体/颅压问题", "should_stop_dialogue": true
+  },
+  {
+    "rule_id": "RED_GLAUCOMA",
+    "name": "青光眼征象",
+    "condition": { "field": "slots.headache.red_flags.eye_symptoms", "operator": "equals", "value": true },
+    "risk_level": "red", "reason": "头痛伴红眼、眼痛、彩虹圈，需排除急性闭角型青光眼", "should_stop_dialogue": true
+  }
+]

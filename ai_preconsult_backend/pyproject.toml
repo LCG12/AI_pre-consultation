@@ -1,0 +1,15 @@
+[project]
+name = "ai-preconsult-backend"
+version = "0.1.0"
+description = "AI preconsultation and triage backend MVP"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "httpx",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["ai_preconsult_backend/app/tests"]

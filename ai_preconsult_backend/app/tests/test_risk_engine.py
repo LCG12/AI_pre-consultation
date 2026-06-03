@@ -1,0 +1,169 @@
+from ai_preconsult_backend.app.services.preconsult_service import create_initial_state, handle_message
+
+
+def test_red_flag_chest_pain_and_dyspnea_stops_dialogue():
+    state = create_initial_state()
+
+    new_state, response, audit = handle_message(state, "胸口疼，喘不上气", 0.95)
+
+    assert response.status == "emergency"
+    assert response.risk_level == "red"
+    assert response.should_stop_dialogue is True
+    assert response.recommended_departments == ["急诊"]
+    assert audit["red_flag_precheck"]["chest_pain"] is True
+    assert audit["red_flag_precheck"]["shortness_of_breath"] is True
+    assert new_state.status == "emergency"
+
+
+def test_yellow_fever_three_days():
+    state = create_initial_state()
+
+    _new_state, response, audit = handle_message(state, "我发烧三天，最高38度8，没有胸痛，也没有喘", 0.95)
+
+    assert response.risk_level == "yellow"
+    assert "发热持续3天及以上" in response.risk_reasons
+    assert audit["extracted_slots"]["slots.fever.duration_days"] == 3
+    assert audit["extracted_slots"]["slots.fever.max_temperature_c"] == 38.8
+
+
+def test_low_asr_confidence_asks_repeat():
+    state = create_initial_state()
+
+    _new_state, response, _audit = handle_message(state, "发烧", 0.3)
+
+    assert response.status == "in_progress"
+    assert "没有完全听清" in response.reply
+
+
+def test_safety_question_is_blocked():
+    state = create_initial_state()
+
+    _new_state, response, audit = handle_message(state, "我是不是肺炎，吃什么药", 0.95)
+
+    assert audit["safety_blocked"] is True
+    assert "不能为您做诊断或提供处方建议" in response.reply
+
+
+def test_llm_extraction_is_used_when_available(monkeypatch):
+    state = create_initial_state()
+
+    def fake_extract_slots_with_llm(text, state_dict):
+        return {
+            "extracted_slots": {
+                "chief_complaint.raw_text": text,
+                "chief_complaint.main_symptoms": ["fever"],
+                "slots.fever.duration_days": 4,
+                "slots.fever.max_temperature_c": 38.5,
+                "slots.red_flags.chest_pain": False,
+            },
+            "uncertain_fields": [],
+            "raw_evidence": [{"field": "slots.fever.duration_days", "text": "四天"}],
+        }
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        fake_extract_slots_with_llm,
+    )
+
+    new_state, response, audit = handle_message(state, "发热四天，最高38度5，没有胸痛", 0.95)
+
+    assert audit["extraction_source"] == "llm"
+    assert new_state.slots.fever.duration_days == 4
+    assert new_state.slots.fever.max_temperature_c == 38.5
+    assert response.risk_level == "yellow"
+
+
+def test_dictionary_fallback_when_llm_fails(monkeypatch):
+    from ai_preconsult_backend.app.agents.extraction_agent import LLMExtractionError
+
+    state = create_initial_state()
+
+    def fake_extract_slots_with_llm(text, state_dict):
+        raise LLMExtractionError("timeout")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        fake_extract_slots_with_llm,
+    )
+
+    new_state, response, audit = handle_message(state, "我发烧三天，最高38度8，没有胸痛，也没有喘", 0.95)
+
+    assert audit["extraction_source"] == "dictionary_fallback"
+    assert "timeout" in audit["llm_error"]
+    assert new_state.slots.fever.duration_days == 3
+    assert response.risk_level == "yellow"
+
+
+def test_short_negative_answer_uses_previous_red_flag_question(monkeypatch):
+    state = create_initial_state()
+
+    def first_extract(text, state_dict):
+        return {
+            "extracted_slots": {
+                "chief_complaint.raw_text": text,
+                "chief_complaint.main_symptoms": ["fever"],
+                "slots.fever.duration_days": 3,
+                "slots.fever.max_temperature_c": 38.8,
+                "slots.red_flags.chest_pain": False,
+                "slots.red_flags.shortness_of_breath": False,
+            },
+            "uncertain_fields": [],
+            "raw_evidence": [],
+        }
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        first_extract,
+    )
+
+    state, first_response, _first_audit = handle_message(state, "我发烧三天，最高38度8，没有胸痛，也没有喘。", 0.95)
+    assert first_response.reply == "目前有没有呼吸困难、胸痛或咳血？"
+    assert state.dialogue.last_question_key == "red_flag_respiratory_group"
+
+    def should_not_call_llm(text, state_dict):
+        raise AssertionError("short contextual answer should not call LLM")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        should_not_call_llm,
+    )
+
+    state, second_response, second_audit = handle_message(state, "没有", 0.95)
+
+    assert second_audit["extraction_source"] == "contextual_rule"
+    assert state.slots.red_flags.shortness_of_breath is False
+    assert state.slots.red_flags.chest_pain is False
+    assert state.slots.red_flags.hemoptysis is False
+    assert state.chief_complaint.raw_text == "我发烧三天，最高38度8，没有胸痛，也没有喘。"
+    assert second_response.reply != "目前有没有呼吸困难、胸痛或咳血？"
+
+
+def test_sputum_color_answer_uses_previous_cough_question(monkeypatch):
+    state = create_initial_state()
+    state.status = "in_progress"
+    state.chief_complaint.raw_text = "我发烧三天，最高38度8，没有胸痛，也没有喘。"
+    state.chief_complaint.main_symptoms = ["fever"]
+    state.slots.fever.duration_days = 3
+    state.slots.fever.max_temperature_c = 38.8
+    state.slots.red_flags.shortness_of_breath = False
+    state.slots.red_flags.chest_pain = False
+    state.slots.red_flags.hemoptysis = False
+    state.patient_basic_info.age = 25
+    state.dialogue.turn_count = 3
+    state.dialogue.last_question_key = "slots.cough.cough_type"
+
+    def should_not_call_llm(text, state_dict):
+        raise AssertionError("cough contextual answer should not call LLM")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        should_not_call_llm,
+    )
+
+    new_state, response, audit = handle_message(state, "黄色", 0.95)
+
+    assert audit["extraction_source"] == "contextual_rule"
+    assert new_state.slots.cough.has_cough is True
+    assert new_state.slots.cough.cough_type == "productive"
+    assert new_state.slots.cough.sputum == "yellow"
+    assert response.reply != "咳嗽是干咳还是有痰？如果有痰，痰是什么颜色？"

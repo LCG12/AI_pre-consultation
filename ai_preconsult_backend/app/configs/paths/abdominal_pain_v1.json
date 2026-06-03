@@ -1,0 +1,21 @@
+{
+  "path_id": "abdominal_pain_v1",
+  "name": "腹痛预问诊",
+  "max_turns": 10,
+  "required_slots": [
+    { "key": "patient_basic_info.age", "priority": 100, "question_type": "basic" },
+    { "key": "slots.red_flags.peritoneal_signs", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.red_flags.hematemesis", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.red_flags.melena", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.red_flags.syncope", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.abdominal_pain.location", "priority": 90, "question_type": "symptom" },
+    { "key": "slots.abdominal_pain.pain_type", "priority": 90, "question_type": "symptom" },
+    { "key": "slots.abdominal_pain.duration_hours", "priority": 90, "question_type": "symptom" },
+    { "key": "slots.abdominal_pain.severity", "priority": 85, "question_type": "symptom" },
+    { "key": "slots.associated_symptoms.nausea_vomiting", "priority": 80, "question_type": "symptom" },
+    { "key": "slots.associated_symptoms.fever", "priority": 80, "question_type": "symptom" },
+    { "key": "patient_basic_info.pregnancy_status", "priority": 100, "question_type": "basic" },
+    { "key": "slots.allergy_history.has_allergy", "priority": 50, "question_type": "history" },
+    { "key": "slots.medication_history.has_used_medicine", "priority": 50, "question_type": "history" }
+  ]
+}

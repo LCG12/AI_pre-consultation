@@ -1,0 +1,32 @@
+[
+  {
+    "rule_id": "DEPT_EMERGENCY",
+    "condition": { "field": "risk.current_level", "operator": "equals", "value": "red" },
+    "departments": ["急诊"], "reason": "存在急症风险信号"
+  },
+  {
+    "rule_id": "DEPT_CHILD",
+    "condition": { "field": "patient_basic_info.age", "operator": "<", "value": 14 },
+    "departments": ["儿科", "全科"], "reason": "儿童"
+  },
+  {
+    "rule_id": "DEPT_PREGNANCY",
+    "condition": { "field": "patient_basic_info.pregnancy_status", "operator": "equals", "value": true },
+    "departments": ["产科", "全科"], "reason": "孕期不适需结合产科情况评估"
+  },
+  {
+    "rule_id": "DEPT_FEVER_COUGH",
+    "condition": { "field": "chief_complaint.main_symptoms", "operator": "contains_any", "value": ["fever", "cough", "sore_throat"] },
+    "departments": ["呼吸内科", "全科"], "reason": "主诉为呼吸道相关症状"
+  },
+  {
+    "rule_id": "DEPT_ABDOMINAL",
+    "condition": { "field": "chief_complaint.main_symptoms", "operator": "contains_any", "value": ["abdominal_pain"] },
+    "departments": ["消化内科", "普外科", "全科"], "reason": "主诉为腹痛，可能涉及消化或外科"
+  },
+  {
+    "rule_id": "DEPT_HEADACHE",
+    "condition": { "field": "chief_complaint.main_symptoms", "operator": "contains_any", "value": ["headache"] },
+    "departments": ["神经内科", "全科"], "reason": "主诉为头痛，建议神经内科评估"
+  }
+]

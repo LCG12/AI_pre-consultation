@@ -1,0 +1,32 @@
+{
+  "path_id": "headache_v1",
+  "name": "头痛预问诊",
+  "max_turns": 14,
+  "required_slots": [
+    { "key": "patient_basic_info.age", "priority": 105, "question_type": "basic" },
+    { "key": "patient_basic_info.gender", "priority": 105, "question_type": "basic" },
+    { "key": "slots.headache.red_flags.thunderclap_onset", "priority": 105, "question_type": "red_flag" },
+    { "key": "slots.headache.red_flags.neuro_symptoms", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.headache.red_flags.fever_stiff_neck", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.headache.red_flags.trauma_anticoag", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.headache.red_flags.new_onset_over_50", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.headache.red_flags.worsening_pattern", "priority": 100, "question_type": "red_flag" },
+    { "key": "patient_basic_info.pregnancy_status", "priority": 100, "question_type": "basic" },
+    { "key": "slots.headache.red_flags.pregnancy_related", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.headache.red_flags.eye_symptoms", "priority": 100, "question_type": "red_flag" },
+    { "key": "slots.headache.onset_speed", "priority": 90, "question_type": "symptom" },
+    { "key": "slots.headache.location", "priority": 90, "question_type": "symptom" },
+    { "key": "slots.headache.pain_type", "priority": 90, "question_type": "symptom" },
+    { "key": "slots.headache.severity", "priority": 85, "question_type": "symptom" },
+    { "key": "slots.headache.duration_hours", "priority": 85, "question_type": "symptom" },
+    { "key": "slots.headache.frequency", "priority": 80, "question_type": "symptom" },
+    { "key": "slots.associated_symptoms.nausea_vomiting", "priority": 80, "question_type": "symptom" },
+    { "key": "slots.associated_symptoms.photophobia", "priority": 80, "question_type": "symptom" },
+    { "key": "slots.associated_symptoms.visual_aura", "priority": 75, "question_type": "symptom" },
+    { "key": "slots.associated_symptoms.neck_pain", "priority": 75, "question_type": "symptom" },
+    { "key": "slots.medication_history.has_used_medicine", "priority": 50, "question_type": "history" },
+    { "key": "slots.medication_history.detail", "priority": 50, "question_type": "history" },
+    { "key": "slots.allergy_history.has_allergy", "priority": 50, "question_type": "history" },
+    { "key": "slots.allergy_history.detail", "priority": 50, "question_type": "history" }
+  ]
+}
