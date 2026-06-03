@@ -1,0 +1,87 @@
+{
+  "session_id": "s_3f11d3fc1708",
+  "status": "completed",
+  "source": "robot",
+  "robot_context": {
+    "robot_id": null,
+    "location": null
+  },
+  "path_id": "abdominal_pain_v1",
+  "chief_complaint": {
+    "raw_text": "肚子疼，右下腹，绞痛，疼了6小时",
+    "main_symptoms": [
+      "abdominal_pain"
+    ],
+    "duration_days": null
+  },
+  "patient_basic_info": {
+    "age": 28,
+    "gender": "female",
+    "pregnancy_status": false
+  },
+  "slots": {
+    "fever": {
+      "duration_days": null,
+      "max_temperature_c": null,
+      "current_temperature_c": null
+    },
+    "cough": {
+      "has_cough": null,
+      "cough_type": null,
+      "sputum": null
+    },
+    "abdominal_pain": {
+      "location": "right_lower",
+      "pain_type": "colicky",
+      "severity": "mild",
+      "duration_hours": 6,
+      "radiation": null,
+      "onset": null,
+      "eating_relationship": null,
+      "bowel_movement": null
+    },
+    "associated_symptoms": {
+      "sore_throat": null,
+      "fatigue": null,
+      "headache": null,
+      "diarrhea": null,
+      "rash": null,
+      "nausea_vomiting": true,
+      "constipation": null,
+      "fever": false
+    },
+    "red_flags": {
+      "shortness_of_breath": null,
+      "chest_pain": null,
+      "hemoptysis": null,
+      "confusion": null,
+      "seizure": null,
+      "cyanosis": null,
+      "peritoneal_signs": false,
+      "hematemesis": false,
+      "melena": false,
+      "syncope": false
+    },
+    "past_history": {},
+    "allergy_history": {
+      "has_allergy": false,
+      "detail": null
+    },
+    "medication_history": {
+      "has_used_medicine": false,
+      "detail": null
+    }
+  },
+  "risk": {
+    "current_level": "green",
+    "rule_hits": []
+  },
+  "dialogue": {
+    "turn_count": 8,
+    "max_turns": 5,
+    "missing_required_slots": [],
+    "last_question_key": null,
+    "skipped_slots": [],
+    "pending_confirmation": null
+  }
+}
