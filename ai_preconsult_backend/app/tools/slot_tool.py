@@ -6,6 +6,13 @@ from ai_preconsult_backend.app.core.config_loader import get_path_config
 from ai_preconsult_backend.app.tools.state_tool import get_by_path
 
 
+RESPIRATORY_RED_FLAG_GROUP = {
+    "slots.red_flags.shortness_of_breath",
+    "slots.red_flags.chest_pain",
+    "slots.red_flags.hemoptysis",
+}
+
+
 def missing_required_slots(state: dict[str, Any]) -> list[str]:
     path_config = get_path_config(state.get("path_id", "fever_cough_v1"))
     required_slots = sorted(
@@ -23,14 +30,11 @@ def missing_required_slots(state: dict[str, Any]) -> list[str]:
 
 def plan_next_question(state: dict[str, Any]) -> str | None:
     skipped = set(state.get("dialogue", {}).get("skipped_slots", []))
+    if "red_flag_respiratory_group" in skipped:
+        skipped.update(RESPIRATORY_RED_FLAG_GROUP)
     missing = [s for s in missing_required_slots(state) if s not in skipped]
     if not missing:
         return None
-    red_group = {
-        "slots.red_flags.shortness_of_breath",
-        "slots.red_flags.chest_pain",
-        "slots.red_flags.hemoptysis",
-    }
-    if red_group.intersection(missing):
+    if RESPIRATORY_RED_FLAG_GROUP.intersection(missing):
         return "red_flag_respiratory_group"
     return missing[0]

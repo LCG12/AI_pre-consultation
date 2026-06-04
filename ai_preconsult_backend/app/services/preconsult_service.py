@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from ai_preconsult_backend.app.agents.extraction_agent import LLMExtractionError, extract_slots_with_llm
@@ -34,6 +35,16 @@ AVAILABLE_PATHS = {
     "abdominal_pain_v1": {"name": "腹痛", "opening": "您说肚子不舒服，具体是哪个位置疼？疼了多久了？是什么样的疼法？"},
     "headache_v1": {"name": "头痛", "opening": "您说头痛，具体是哪个位置疼？是一侧还是两侧？是什么样的痛感？疼了多久了？"},
 }
+
+RESPIRATORY_RED_FLAG_FIELDS = [
+    "slots.red_flags.shortness_of_breath",
+    "slots.red_flags.chest_pain",
+    "slots.red_flags.hemoptysis",
+]
+
+NEGATIVE_ANSWERS = {"没有", "没", "无", "否", "否认", "没有了", "都没有", "均无", "都无", "全没有", "全部没有", "没有这些", "没有上述", "没这些", "没上述", "不存在"}
+UNCERTAIN_ANSWERS = {"不知道", "不确定", "说不清", "不清楚", "不晓得", "不太清楚"}
+POSITIVE_ANSWERS = {"有", "有的", "有一点", "有一些", "有点", "是", "是的"}
 
 
 def create_initial_state(source: str = "robot", robot_id: str | None = None, location: str | None = None, path_id: str | None = None, age: int | None = None, gender: str | None = None) -> PreconsultState:
@@ -143,6 +154,12 @@ def handle_message(state: PreconsultState, text: str, asr_confidence: float | No
             doctor_summary_status="generating",
         ), audit
 
+    contextual_reply: tuple[str, list[str]] | None = None
+    if not confirmation_handled:
+        contextual_handled, contextual_reply = _handle_contextual_answer(text, state_dict, audit)
+        if contextual_handled:
+            confirmation_handled = True
+
     if not confirmation_handled:
         extracted: dict = {}
         try:
@@ -172,6 +189,8 @@ def handle_message(state: PreconsultState, text: str, asr_confidence: float | No
                 set_by_path(state_dict, path, merged)
             else:
                 set_by_path(state_dict, path, value)
+
+    _auto_infer_slots(state_dict)
 
     detected_path = _detect_path(state_dict)
     if detected_path and detected_path != state_dict["path_id"]:
@@ -223,6 +242,20 @@ def handle_message(state: PreconsultState, text: str, asr_confidence: float | No
             recommended_departments=departments,
         ), audit
 
+    if contextual_reply:
+        reply, quick_replies = contextual_reply
+        new_state = PreconsultState.model_validate(state_dict)
+        return new_state, PreconsultResponse(
+            session_id=state.session_id,
+            status="in_progress",
+            reply=reply,
+            display_text=reply,
+            quick_replies=quick_replies,
+            risk_level=risk_level,
+            risk_reasons=risk_reasons,
+            recommended_departments=departments,
+        ), audit
+
     uncertain_fields = audit.get("uncertain_fields", [])
     if uncertain_fields and not confirmation_handled:
         for field in uncertain_fields:
@@ -254,7 +287,7 @@ def handle_message(state: PreconsultState, text: str, asr_confidence: float | No
         state_dict["dialogue"]["question_retries"] = retries
 
         if retries.get(next_question_key, 0) >= 3:
-            state_dict["dialogue"]["skipped_slots"].append(next_question_key)
+            _mark_question_skipped(state_dict, next_question_key)
             retries.pop(next_question_key, None)
             next_question_key = plan_next_question(state_dict)
         if next_question_key:
@@ -300,9 +333,14 @@ def _generate_question(state_dict: dict, question_key: str) -> tuple[str, list[s
     missing = [s for s in missing if s not in skipped]
     path_id = state_dict.get("path_id", "fever_cough_v1")
 
+    if question_key == "red_flag_respiratory_group":
+        return build_question(question_key)
+
+    focused_missing = [question_key] + [s for s in missing if s != question_key]
+
     if missing and question_key not in BASIC_INFO_KEYS:
         try:
-            result = generate_natural_question(state_dict, missing, path_id)
+            result = generate_natural_question(state_dict, focused_missing, path_id)
             if result and result.get("question"):
                 qr = result.get("quick_replies")
                 if isinstance(qr, list) and qr:
@@ -321,6 +359,133 @@ def _generate_question(state_dict: dict, question_key: str) -> tuple[str, list[s
     except LLMQuestionError:
         pass
     return build_question(question_key)
+
+
+def _handle_contextual_answer(text: str, state_dict: dict, audit: dict) -> tuple[bool, tuple[str, list[str]] | None]:
+    """Resolve short answers based on the previous question before calling the LLM."""
+    question_key = state_dict.get("dialogue", {}).get("last_question_key")
+    normalized = _normalize_short_answer(text)
+
+    if question_key in {"red_flag_respiratory_group", "red_flag_respiratory_group_detail"}:
+        if _is_negative_answer(normalized):
+            extracted = {field: False for field in RESPIRATORY_RED_FLAG_FIELDS}
+            for field, value in extracted.items():
+                set_by_path(state_dict, field, value)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+        if _is_uncertain_answer(normalized):
+            for field in RESPIRATORY_RED_FLAG_FIELDS:
+                _append_skipped_slot(state_dict, field)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = {}
+            return True, None
+
+        if normalized in POSITIVE_ANSWERS:
+            state_dict["dialogue"]["last_question_key"] = "red_flag_respiratory_group_detail"
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = {}
+            return True, ("具体是哪一种情况：呼吸困难、胸痛，还是咳血？", ["呼吸困难", "胸痛", "咳血"])
+
+    if question_key == "slots.cough.cough_type":
+        extracted = _extract_contextual_cough_answer(text, normalized)
+        if extracted is not None:
+            if extracted:
+                for field, value in extracted.items():
+                    set_by_path(state_dict, field, value)
+            else:
+                _append_skipped_slot(state_dict, question_key)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+    return False, None
+
+
+def _extract_contextual_cough_answer(text: str, normalized: str) -> dict[str, Any] | None:
+    if _is_uncertain_answer(normalized):
+        return {}
+
+    if _is_negative_answer(normalized) or any(word in text for word in ["不咳", "没咳", "没有咳嗽"]):
+        return {
+            "slots.cough.has_cough": False,
+            "slots.cough.cough_type": "none",
+        }
+
+    if "干咳" in text or normalized in {"干", "干咳"}:
+        return {
+            "slots.cough.has_cough": True,
+            "slots.cough.cough_type": "dry",
+        }
+
+    sputum = _detect_sputum_color(text, normalized)
+    if sputum:
+        return {
+            "slots.cough.has_cough": True,
+            "slots.cough.cough_type": "productive",
+            "slots.cough.sputum": sputum,
+        }
+
+    if any(word in text for word in ["有痰", "咳痰", "带痰"]):
+        return {
+            "slots.cough.has_cough": True,
+            "slots.cough.cough_type": "productive",
+        }
+
+    return None
+
+
+def _detect_sputum_color(text: str, normalized: str) -> str | None:
+    color_terms = {
+        "yellow": ["黄", "黄色", "黄痰", "黄色痰"],
+        "white": ["白", "白色", "白痰", "白色痰"],
+        "green": ["绿", "绿色", "绿痰", "绿色痰"],
+        "bloody": ["血", "带血", "血丝", "血痰", "红色", "红痰"],
+    }
+    for value, terms in color_terms.items():
+        if normalized in terms or any(term in text for term in terms if len(term) > 1):
+            return value
+    return None
+
+
+def _normalize_short_answer(text: str) -> str:
+    return (
+        text.strip()
+        .replace("。", "")
+        .replace("，", "")
+        .replace(",", "")
+        .replace("？", "")
+        .replace("?", "")
+        .replace("！", "")
+        .replace("!", "")
+        .replace("；", "")
+        .replace(";", "")
+        .replace(" ", "")
+    )
+
+
+def _is_negative_answer(normalized: str) -> bool:
+    return normalized in NEGATIVE_ANSWERS
+
+
+def _is_uncertain_answer(normalized: str) -> bool:
+    return normalized in UNCERTAIN_ANSWERS
+
+
+def _append_skipped_slot(state_dict: dict, slot_key: str) -> None:
+    skipped = state_dict["dialogue"].setdefault("skipped_slots", [])
+    if slot_key not in skipped:
+        skipped.append(slot_key)
+
+
+def _mark_question_skipped(state_dict: dict, question_key: str) -> None:
+    if question_key == "red_flag_respiratory_group":
+        _append_skipped_slot(state_dict, question_key)
+        for field in RESPIRATORY_RED_FLAG_FIELDS:
+            _append_skipped_slot(state_dict, field)
+        return
+    _append_skipped_slot(state_dict, question_key)
 
 
 CONFIRMATION_LABELS: dict[str, str] = {
@@ -391,6 +556,19 @@ def _handle_confirmation_response(text: str, state_dict: dict, audit: dict) -> b
 
     # Not a direct confirm/deny — treat as normal answer, fall through to extraction
     return False
+
+
+def _auto_infer_slots(state_dict: dict) -> None:
+    """Auto-fill slots inferred from known demographics."""
+    age = state_dict.get("patient_basic_info", {}).get("age")
+    gender = state_dict.get("patient_basic_info", {}).get("gender")
+
+    if age is not None and age < 50:
+        set_by_path(state_dict, "slots.headache.red_flags.new_onset_over_50", False)
+
+    if gender == "male":
+        set_by_path(state_dict, "patient_basic_info.pregnancy_status", False)
+        set_by_path(state_dict, "slots.headache.red_flags.pregnancy_related", False)
 
 
 def _detect_path(state_dict: dict) -> str | None:

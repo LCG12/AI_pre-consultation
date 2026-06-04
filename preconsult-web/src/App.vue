@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { fetchPaths, createSession } from './api.js'
+import { fetchPaths, createSession, getResult } from './api.js'
 import ChatPanel from './components/ChatPanel.vue'
 import StatePanel from './components/StatePanel.vue'
 import SummaryPanel from './components/SummaryPanel.vue'
+import SessionList from './components/SessionList.vue'
 
 const paths = ref([])
 const selectedPath = ref('')
@@ -11,6 +12,7 @@ const sessionId = ref(null)
 const state = ref({ slots: {} })
 const departments = ref([])
 const completed = computed(() => state.value.status === 'completed' || state.value.status === 'emergency')
+const sessionListRef = ref(null)
 
 async function loadPaths() {
   try { paths.value = await fetchPaths() } catch (e) { /* */ }
@@ -23,12 +25,22 @@ async function handleCreate() {
   sessionId.value = data.session_id
   state.value = { session_id: data.session_id, status: data.status, risk: { current_level: data.risk_level }, path_id: selectedPath.value, slots: {}, dialogue: { turn_count: 0 } }
   departments.value = []
+  sessionListRef.value?.refresh()
+}
+
+async function handleSelectSession(sid) {
+  sessionId.value = sid
+  try {
+    const s = await getResult(sid)
+    state.value = s
+  } catch (e) { /* */ }
 }
 
 function handleReset() {
   sessionId.value = null
   state.value = { slots: {} }
   selectedPath.value = ''
+  sessionListRef.value?.refresh()
 }
 
 function onStateUpdate(s, deps) {
@@ -58,6 +70,7 @@ function onStateUpdate(s, deps) {
     </div>
 
     <div class="main">
+      <SessionList ref="sessionListRef" :currentId="sessionId" @select="handleSelectSession" />
       <ChatPanel
         :sessionId="sessionId"
         :state="state"
@@ -114,5 +127,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .btn.danger:hover { background: #c62828; }
 
 .main { display: flex; flex: 1; overflow: hidden; }
+.main > :first-child { width: 200px; min-width: 200px; border-right: 1px solid #e0e0e0; }
 .right { flex: 1; display: flex; flex-direction: column; border-left: 1px solid #e0e0e0; max-width: 420px; }
 </style>

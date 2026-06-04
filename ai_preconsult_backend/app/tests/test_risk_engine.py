@@ -1,4 +1,5 @@
 from ai_preconsult_backend.app.services.preconsult_service import create_initial_state, handle_message
+from ai_preconsult_backend.app.engines.risk_engine import evaluate_risk
 
 
 def test_red_flag_chest_pain_and_dyspnea_stops_dialogue():
@@ -167,3 +168,25 @@ def test_sputum_color_answer_uses_previous_cough_question(monkeypatch):
     assert new_state.slots.cough.cough_type == "productive"
     assert new_state.slots.cough.sputum == "yellow"
     assert response.reply != "咳嗽是干咳还是有痰？如果有痰，痰是什么颜色？"
+
+
+def test_headache_text_duration_does_not_crash_and_hits_yellow():
+    state = create_initial_state(path_id="headache_v1").model_dump()
+    state["chief_complaint"]["main_symptoms"] = ["headache"]
+    state["slots"]["headache"]["duration_hours"] = "80小时"
+
+    level, hits, _should_stop = evaluate_risk(state)
+
+    assert level == "yellow"
+    assert any(hit.rule_id == "YELLOW_HEADACHE_LONG" for hit in hits)
+
+
+def test_abdominal_text_duration_days_hits_yellow():
+    state = create_initial_state(path_id="abdominal_pain_v1").model_dump()
+    state["chief_complaint"]["main_symptoms"] = ["abdominal_pain"]
+    state["slots"]["abdominal_pain"]["duration_hours"] = "两天"
+
+    level, hits, _should_stop = evaluate_risk(state)
+
+    assert level == "yellow"
+    assert any(hit.rule_id == "YELLOW_ABDO_LONG" for hit in hits)

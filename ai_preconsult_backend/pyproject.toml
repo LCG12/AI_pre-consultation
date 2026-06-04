@@ -11,5 +11,5 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["ai_preconsult_backend/app/tests"]
+pythonpath = [".."]
+testpaths = ["app/tests"]

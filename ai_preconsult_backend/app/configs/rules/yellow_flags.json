@@ -38,7 +38,7 @@
   {
     "rule_id": "YELLOW_ABDO_LONG",
     "name": "腹痛超过24小时",
-    "condition": { "field": "slots.abdominal_pain.duration_hours", "operator": "contains_any", "value": ["天", "日", "24"] },
+    "condition": { "field": "slots.abdominal_pain.duration_hours", "operator": ">=", "value": 24 },
     "risk_level": "yellow", "reason": "腹痛时间较长，建议就医评估"
   },
   {

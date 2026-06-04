@@ -10,6 +10,7 @@ from ai_preconsult_backend.app.agents.summary_agent import (
 from ai_preconsult_backend.app.db.sqlite_store import (
     create_session,
     list_messages,
+    list_sessions,
     load_state,
     persist_state,
     save_message,
@@ -114,6 +115,11 @@ def get_result(session_id: str) -> dict:
         "missing_required_slots": state.dialogue.missing_required_slots,
         "state": state.model_dump(),
     }
+
+
+@router.get("/sessions")
+def get_sessions() -> dict:
+    return {"sessions": list_sessions()}
 
 
 @router.get("/sessions/{session_id}/messages")

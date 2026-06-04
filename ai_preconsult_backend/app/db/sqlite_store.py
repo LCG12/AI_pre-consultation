@@ -184,6 +184,10 @@ def save_message(
 
 def save_risk_hits(state: PreconsultState) -> None:
     with get_connection() as connection:
+        connection.execute(
+            "DELETE FROM risk_rule_hits WHERE session_code = ?",
+            (state.session_id,),
+        )
         for hit in state.risk.rule_hits:
             connection.execute(
                 """
@@ -203,6 +207,26 @@ def save_risk_hits(state: PreconsultState) -> None:
                     utc_now(),
                 ),
             )
+
+
+def list_sessions(limit: int = 50) -> list[dict[str, Any]]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT s.session_code, s.status, s.source, s.created_at, s.updated_at,
+                   st.risk_level, st.reason
+            FROM preconsult_sessions s
+            LEFT JOIN (
+                SELECT session_code, risk_level, reason,
+                       ROW_NUMBER() OVER (PARTITION BY session_code ORDER BY id DESC) as rn
+                FROM risk_rule_hits
+            ) st ON s.session_code = st.session_code AND st.rn = 1
+            ORDER BY s.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def list_messages(session_id: str) -> list[dict[str, Any]]:

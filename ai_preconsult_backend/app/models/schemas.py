@@ -42,7 +42,7 @@ class AbdominalPainSlots(BaseModel):
     location: str | None = None
     pain_type: str | None = None
     severity: str | None = None
-    duration_hours: str | None = None
+    duration_hours: float | str | None = None
     radiation: str | None = None
     onset: str | None = None
     eating_relationship: str | None = None
@@ -65,7 +65,7 @@ class HeadacheSlots(BaseModel):
     location: str | None = None
     pain_type: str | None = None
     severity: str | None = None
-    duration_hours: str | None = None
+    duration_hours: float | str | None = None
     frequency: str | None = None
     red_flags: HeadacheRedFlags = Field(default_factory=HeadacheRedFlags)
 

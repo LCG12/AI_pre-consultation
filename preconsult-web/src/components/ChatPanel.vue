@@ -9,16 +9,36 @@ const messages = ref([])
 const input = ref('')
 const quickReplies = ref([])
 const chatEl = ref(null)
+const inputEl = ref(null)
+const sending = ref(false)
+let messageLoadToken = 0
 
 watch(() => props.sessionId, (sid) => {
   if (sid) {
-    messages.value = [{ role: 'assistant', message_text: '请问您哪里不舒服？' }]
-    quickReplies.value = []
+    loadMessages(sid)
   } else {
     messages.value = []
     quickReplies.value = []
   }
 })
+
+async function loadMessages(sid) {
+  const token = ++messageLoadToken
+  messages.value = []
+  quickReplies.value = []
+  try {
+    const rows = await getMessages(sid)
+    if (token === messageLoadToken) {
+      messages.value = rows
+      await nextTick()
+      scrollBottom()
+    }
+  } catch (e) {
+    if (token === messageLoadToken) {
+      messages.value = []
+    }
+  }
+}
 
 async function loadState() {
   if (!props.sessionId) return
@@ -29,7 +49,8 @@ async function loadState() {
 }
 
 async function send(text) {
-  if (!text.trim() || !props.sessionId || props.completed) return
+  if (!text.trim() || !props.sessionId || props.completed || sending.value) return
+  sending.value = true
   messages.value.push({ role: 'patient', message_text: text.trim() })
   try {
     const resp = await sendMessage(props.sessionId, text.trim())
@@ -39,6 +60,10 @@ async function send(text) {
     await nextTick()
     scrollBottom()
   } catch (e) { alert('发送失败: ' + e.message) }
+  finally {
+    sending.value = false
+    nextTick(() => inputEl.value?.focus())
+  }
 }
 
 function onKey(e) {
@@ -70,15 +95,20 @@ function scrollBottom() {
       </div>
     </div>
 
+    <div class="typing-indicator" v-if="sending">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="typing-text">AI 正在思考...</span>
+    </div>
+
     <div class="quick-row" v-if="quickReplies.length && !completed">
       <button v-for="qr in quickReplies" :key="qr" class="qr-btn" @click="send(qr); input=''">{{ qr }}</button>
     </div>
 
     <div class="input-row">
-      <input v-model="input" @keyup.enter="onKey" placeholder="输入患者消息..."
-        :disabled="!sessionId || completed" />
-      <button class="btn primary" @click="send(input); input=''" :disabled="!sessionId || !input.trim() || completed">
-        发送
+      <input ref="inputEl" v-model="input" @keyup.enter="onKey" placeholder="输入患者消息..."
+        :disabled="!sessionId || completed || sending" />
+      <button class="btn primary" @click="send(input); input=''" :disabled="!sessionId || !input.trim() || completed || sending">
+        {{ sending ? '等待回复...' : '发送' }}
       </button>
     </div>
   </div>
@@ -113,4 +143,11 @@ function scrollBottom() {
 .input-row { padding: 10px 16px; border-top: 1px solid #eee; display: flex; gap: 8px; }
 .input-row input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px; outline: none; }
 .input-row input:focus { border-color: #1a73e8; }
+
+.typing-indicator { display: flex; align-items: center; gap: 6px; padding: 8px 20px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #1a73e8; animation: bounce 1.2s infinite; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-6px); opacity: 1; } }
+.typing-text { font-size: 12px; color: #999; margin-left: 4px; }
 </style>

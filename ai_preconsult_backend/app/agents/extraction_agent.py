@@ -83,10 +83,11 @@ EXTRACTION_TOOL = {
             "数值含糊时直接提取合理估计值（如'几小时'→duration_hours=3，"
             "'一点点'→severity='mild'），不要列入 uncertain_fields。"
             "只有患者说'不确定''不知道'才列入 uncertain_fields。"
-            "重要：如果患者描述与某布尔字段互斥，要设为 false。"
-            "如'慢慢加重的'→onset_speed='gradual' 且 thunderclap_onset=false。"
-            "'整个头都疼'→location='diffuse'。"
-            "明确否认用 false（如'没有胸痛'→chest_pain=false）。"
+            "重要：患者明确否认必须设为 false！"
+            "但只否定患者明确提到的那个字段，不要扩大到无关字段。"
+            "例：问'有没有神经症状'，患者说'没有这些症状'\n"
+            "  →只设 neuro_symptoms=false，不要同时把所有红旗都设 false。"
+            "raw_evidence 里记录为否定的字段，必须同时输出 false 值。"
         ),
         "parameters": {
             "type": "object",
@@ -122,7 +123,7 @@ EXTRACTION_TOOL = {
                     "type": "object",
                     "description": "发热相关字段",
                     "properties": {
-                        "duration_days": {"type": "string", "description": "发热持续天数，如'3'、'三天'等"},
+                        "duration_days": {"type": "integer", "description": "发热持续天数"},
                         "max_temperature_c": {"type": "number", "description": "最高体温（摄氏度）"},
                         "current_temperature_c": {"type": "number", "description": "当前体温（摄氏度）"},
                     },
@@ -373,24 +374,28 @@ def normalize_extraction_result(result: dict[str, Any], raw_text: str) -> dict[s
         if chief.get("duration_days") is not None:
             normalized_slots["chief_complaint.duration_days"] = _safe_int(chief["duration_days"])
 
-    # Flatten nested slot groups
+    def _flatten(value: Any, prefix: str) -> None:
+        """Recursively flatten nested objects into dot-notation keys."""
+        if not isinstance(value, dict):
+            return
+        for field, val in value.items():
+            if val is None or val == "":
+                continue
+            flat_key = f"{prefix}.{field}"
+            if isinstance(val, dict):
+                _flatten(val, flat_key)
+            elif flat_key in ALLOWED_SLOT_KEYS:
+                if isinstance(val, bool):
+                    normalized_slots[flat_key] = val
+                elif isinstance(val, str) and val.strip():
+                    normalized_slots[flat_key] = val
+                elif isinstance(val, (int, float)):
+                    normalized_slots[flat_key] = val
+
     for nested_key, flat_prefix in _NESTED_TO_FLAT.items():
         group = result.get(nested_key)
-        if not isinstance(group, dict):
-            continue
-        for field, value in group.items():
-            if value is None or value == "":
-                continue
-            flat_key = f"{flat_prefix}.{field}"
-            if flat_key not in ALLOWED_SLOT_KEYS:
-                continue
-            if isinstance(value, bool):
-                normalized_slots[flat_key] = value
-            elif isinstance(value, str):
-                if value.strip():
-                    normalized_slots[flat_key] = value
-            elif isinstance(value, (int, float)):
-                normalized_slots[flat_key] = value
+        if isinstance(group, dict):
+            _flatten(group, flat_prefix)
 
     uncertain_fields = result.get("uncertain_fields")
     raw_evidence = result.get("raw_evidence")
