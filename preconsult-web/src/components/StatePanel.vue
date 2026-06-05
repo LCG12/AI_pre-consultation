@@ -30,7 +30,12 @@ const VALUE_MAP = {
   'female':'女','male':'男',
 }
 
-function fmtVal(v) {
+function isUncertain(path) {
+  return !!path && (props.state?.dialogue?.uncertain_slots || []).includes(path)
+}
+
+function fmtVal(v, path) {
+  if (isUncertain(path)) return { text: '不确定', cls: 'uncertain' }
   if (v === null || v === undefined) return { text: '未采集', cls: 'null' }
   if (typeof v === 'boolean') return { text: v ? '是' : '否', cls: v ? 'true' : 'false' }
   const s = String(v)
@@ -40,9 +45,12 @@ function fmtVal(v) {
 function fieldRows(prefix, keys) {
   const src = props.state?.slots?.[prefix]
   if (!src) return []
-  const hasAny = keys.some(k => src[k] !== null && src[k] !== undefined)
+  const hasAny = keys.some(k => src[k] !== null && src[k] !== undefined || isUncertain(`slots.${prefix}.${k}`))
   if (!hasAny) return []
-  return keys.map(k => ({ key: k, label: LABELS[k] || k, ...fmtVal(src[k]) }))
+  return keys.map(k => {
+    const path = `slots.${prefix}.${k}`
+    return { key: k, path, label: LABELS[k] || k, ...fmtVal(src[k], path) }
+  })
 }
 
 const hasAbdominal = computed(() => fieldRows('abdominal_pain', ['location','pain_type','severity','duration_hours','radiation','onset','eating_relationship','bowel_movement']).length > 0)
@@ -53,7 +61,7 @@ const hasHeadache = computed(() => fieldRows('headache', ['onset_speed','locatio
 const hasHeadacheRF = computed(() => {
   const src = props.state?.slots?.headache?.red_flags
   if (!src) return false
-  return Object.values(src).some(v => v !== null && v !== undefined)
+  return Object.entries(src).some(([k, v]) => v !== null && v !== undefined || isUncertain(`slots.headache.red_flags.${k}`))
 })
 const hasRedFlags = computed(() => fieldRows('red_flags', ['peritoneal_signs','hematemesis','melena','syncope','shortness_of_breath','chest_pain','hemoptysis','confusion','seizure','cyanosis']).length > 0)
 </script>
@@ -67,6 +75,7 @@ const hasRedFlags = computed(() => fieldRows('red_flags', ['peritoneal_signs','h
         <div class="row"><span class="r-label">路径</span><span class="r-val text">{{ state.path_id }}</span></div>
         <div class="row"><span class="r-label">轮次</span><span class="r-val number">{{ state.dialogue?.turn_count || 0 }}</span></div>
         <div class="row"><span class="r-label">缺失</span><span class="r-val number">{{ (state.dialogue?.missing_required_slots || []).length }}</span></div>
+        <div class="row"><span class="r-label">不确定</span><span class="r-val uncertain">{{ (state.dialogue?.uncertain_slots || []).length }}</span></div>
         <div class="row"><span class="r-label">风险</span><span class="r-val text">{{ state.risk?.current_level }}</span></div>
         <div class="row" v-if="departments.length"><span class="r-label">科室</span><span class="r-val text">{{ departments.join('、') }}</span></div>
       </div>
@@ -75,14 +84,14 @@ const hasRedFlags = computed(() => fieldRows('red_flags', ['peritoneal_signs','h
         <div class="s-title">患者</div>
         <div class="row" v-for="(v,k) in state.patient_basic_info" :key="k">
           <span class="r-label">{{ k }}</span>
-          <span :class="'r-val ' + fmtVal(v).cls">{{ fmtVal(v).text }}</span>
+          <span :class="'r-val ' + fmtVal(v, `patient_basic_info.${k}`).cls">{{ fmtVal(v, `patient_basic_info.${k}`).text }}</span>
         </div>
       </div>
 
       <div class="section" v-if="state.chief_complaint?.main_symptoms?.length">
         <div class="s-title">主诉</div>
         <div class="row"><span class="r-label">症状</span><span class="r-val text">{{ state.chief_complaint.main_symptoms.join(', ') }}</span></div>
-        <div class="row"><span class="r-label">持续天数</span><span :class="'r-val ' + fmtVal(state.chief_complaint.duration_days).cls">{{ fmtVal(state.chief_complaint.duration_days).text }}</span></div>
+        <div class="row"><span class="r-label">持续天数</span><span :class="'r-val ' + fmtVal(state.chief_complaint.duration_days, 'chief_complaint.duration_days').cls">{{ fmtVal(state.chief_complaint.duration_days, 'chief_complaint.duration_days').text }}</span></div>
       </div>
 
       <div class="section" v-if="hasFever">
@@ -117,7 +126,7 @@ const hasRedFlags = computed(() => fieldRows('red_flags', ['peritoneal_signs','h
         <div class="s-title">头痛红旗</div>
         <div class="row" v-for="(v,k) in state.slots?.headache?.red_flags || {}" :key="k">
           <span class="r-label">{{ LABELS[k] || k }}</span>
-          <span :class="'r-val ' + fmtVal(v).cls">{{ fmtVal(v).text }}</span>
+          <span :class="'r-val ' + fmtVal(v, `slots.headache.red_flags.${k}`).cls">{{ fmtVal(v, `slots.headache.red_flags.${k}`).text }}</span>
         </div>
       </div>
 
@@ -137,10 +146,10 @@ const hasRedFlags = computed(() => fieldRows('red_flags', ['peritoneal_signs','h
 
       <div class="section">
         <div class="s-title">过敏/用药</div>
-        <div class="row"><span class="r-label">过敏</span><span :class="'r-val ' + fmtVal(state.slots?.allergy_history?.has_allergy).cls">{{ fmtVal(state.slots?.allergy_history?.has_allergy).text }}</span></div>
-        <div class="row"><span class="r-label">过敏详情</span><span :class="'r-val ' + fmtVal(state.slots?.allergy_history?.detail).cls">{{ fmtVal(state.slots?.allergy_history?.detail).text }}</span></div>
-        <div class="row"><span class="r-label">用药</span><span :class="'r-val ' + fmtVal(state.slots?.medication_history?.has_used_medicine).cls">{{ fmtVal(state.slots?.medication_history?.has_used_medicine).text }}</span></div>
-        <div class="row"><span class="r-label">用药详情</span><span :class="'r-val ' + fmtVal(state.slots?.medication_history?.detail).cls">{{ fmtVal(state.slots?.medication_history?.detail).text }}</span></div>
+        <div class="row"><span class="r-label">过敏</span><span :class="'r-val ' + fmtVal(state.slots?.allergy_history?.has_allergy, 'slots.allergy_history.has_allergy').cls">{{ fmtVal(state.slots?.allergy_history?.has_allergy, 'slots.allergy_history.has_allergy').text }}</span></div>
+        <div class="row"><span class="r-label">过敏详情</span><span :class="'r-val ' + fmtVal(state.slots?.allergy_history?.detail, 'slots.allergy_history.detail').cls">{{ fmtVal(state.slots?.allergy_history?.detail, 'slots.allergy_history.detail').text }}</span></div>
+        <div class="row"><span class="r-label">用药</span><span :class="'r-val ' + fmtVal(state.slots?.medication_history?.has_used_medicine, 'slots.medication_history.has_used_medicine').cls">{{ fmtVal(state.slots?.medication_history?.has_used_medicine, 'slots.medication_history.has_used_medicine').text }}</span></div>
+        <div class="row"><span class="r-label">用药详情</span><span :class="'r-val ' + fmtVal(state.slots?.medication_history?.detail, 'slots.medication_history.detail').cls">{{ fmtVal(state.slots?.medication_history?.detail, 'slots.medication_history.detail').text }}</span></div>
       </div>
     </div>
     <div v-else class="empty">创建会话后展示 State</div>
@@ -163,4 +172,5 @@ const hasRedFlags = computed(() => fieldRows('red_flags', ['peritoneal_signs','h
 .r-val.false { color: #4caf50; }
 .r-val.text { color: #1a73e8; }
 .r-val.number { color: #ff6f00; }
+.r-val.uncertain { color: #8a6d00; }
 </style>

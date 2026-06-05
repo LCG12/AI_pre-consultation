@@ -190,3 +190,122 @@ def test_abdominal_text_duration_days_hits_yellow():
 
     assert level == "yellow"
     assert any(hit.rule_id == "YELLOW_ABDO_LONG" for hit in hits)
+
+
+def test_uncertain_answer_skips_current_headache_slot(monkeypatch):
+    state = create_initial_state(path_id="headache_v1")
+    state.status = "in_progress"
+    state.chief_complaint.main_symptoms = ["headache"]
+    state.patient_basic_info.age = 30
+    state.patient_basic_info.gender = "male"
+    state.slots.headache.red_flags.thunderclap_onset = False
+    state.slots.headache.red_flags.neuro_symptoms = False
+    state.slots.headache.red_flags.fever_stiff_neck = False
+    state.slots.headache.red_flags.trauma_anticoag = False
+    state.slots.headache.red_flags.new_onset_over_50 = False
+    state.slots.headache.red_flags.worsening_pattern = False
+    state.slots.headache.red_flags.pregnancy_related = False
+    state.slots.headache.red_flags.eye_symptoms = False
+    state.dialogue.last_question_key = "slots.headache.onset_speed"
+
+    def should_not_call_llm(text, state_dict):
+        raise AssertionError("uncertain contextual answer should not call LLM")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        should_not_call_llm,
+    )
+
+    new_state, response, audit = handle_message(state, "不确定", 0.95)
+
+    assert audit["extraction_source"] == "contextual_rule"
+    assert "slots.headache.onset_speed" in new_state.dialogue.uncertain_slots
+    assert response.reply != "头痛是突然一下就很痛，还是慢慢加重的？"
+
+
+def test_uncertain_thunderclap_also_skips_onset_speed(monkeypatch):
+    state = create_initial_state(path_id="headache_v1")
+    state.status = "in_progress"
+    state.chief_complaint.main_symptoms = ["headache"]
+    state.patient_basic_info.age = 99
+    state.patient_basic_info.gender = "male"
+    state.dialogue.last_question_key = "slots.headache.red_flags.thunderclap_onset"
+
+    def should_not_call_llm(text, state_dict):
+        raise AssertionError("uncertain red-flag answer should not call LLM")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        should_not_call_llm,
+    )
+
+    new_state, response, audit = handle_message(state, "不确定", 0.95)
+
+    assert audit["extraction_source"] == "contextual_rule"
+    assert "slots.headache.red_flags.thunderclap_onset" in new_state.dialogue.uncertain_slots
+    assert "slots.headache.onset_speed" in new_state.dialogue.uncertain_slots
+    assert response.reply != "头痛是突然一下就很痛，还是慢慢加重的？"
+
+
+def test_contextual_bool_answers_do_not_call_llm(monkeypatch):
+    state = create_initial_state(path_id="headache_v1")
+    state.status = "in_progress"
+    state.chief_complaint.main_symptoms = ["headache"]
+    state.patient_basic_info.age = 30
+    state.patient_basic_info.gender = "male"
+    state.dialogue.last_question_key = "slots.associated_symptoms.visual_aura"
+
+    def should_not_call_llm(text, state_dict):
+        raise AssertionError("contextual bool answer should not call LLM")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        should_not_call_llm,
+    )
+
+    new_state, _response, audit = handle_message(state, "没有", 0.95)
+
+    assert audit["extraction_source"] == "contextual_rule"
+    assert new_state.slots.associated_symptoms.visual_aura is False
+
+
+def test_negative_medication_answer_skips_detail(monkeypatch):
+    state = create_initial_state(path_id="headache_v1")
+    state.status = "in_progress"
+    state.chief_complaint.main_symptoms = ["headache"]
+    state.patient_basic_info.age = 30
+    state.patient_basic_info.gender = "male"
+    state.slots.headache.red_flags.thunderclap_onset = False
+    state.slots.headache.red_flags.neuro_symptoms = False
+    state.slots.headache.red_flags.fever_stiff_neck = False
+    state.slots.headache.red_flags.trauma_anticoag = False
+    state.slots.headache.red_flags.new_onset_over_50 = False
+    state.slots.headache.red_flags.worsening_pattern = False
+    state.slots.headache.red_flags.pregnancy_related = False
+    state.slots.headache.red_flags.eye_symptoms = False
+    state.slots.headache.onset_speed = "gradual"
+    state.slots.headache.location = "bilateral"
+    state.slots.headache.pain_type = "distension"
+    state.slots.headache.severity = "mild"
+    state.slots.headache.duration_hours = "1小时"
+    state.slots.headache.frequency = "daily"
+    state.slots.associated_symptoms.nausea_vomiting = False
+    state.slots.associated_symptoms.photophobia = False
+    state.slots.associated_symptoms.visual_aura = False
+    state.slots.associated_symptoms.neck_pain = False
+    state.dialogue.last_question_key = "slots.medication_history.detail"
+
+    def should_not_call_llm(text, state_dict):
+        raise AssertionError("medication contextual answer should not call LLM")
+
+    monkeypatch.setattr(
+        "ai_preconsult_backend.app.services.preconsult_service.extract_slots_with_llm",
+        should_not_call_llm,
+    )
+
+    new_state, response, audit = handle_message(state, "没有用药", 0.95)
+
+    assert audit["extraction_source"] == "contextual_rule"
+    assert new_state.slots.medication_history.has_used_medicine is False
+    assert "slots.medication_history.detail" not in new_state.dialogue.missing_required_slots
+    assert response.reply != "这次不舒服后是否已经用过药？如果用过，请说一下药名和效果。"

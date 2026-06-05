@@ -139,6 +139,7 @@ class DialogueState(BaseModel):
     missing_required_slots: list[str] = Field(default_factory=list)
     last_question_key: str | None = None
     skipped_slots: list[str] = Field(default_factory=list)
+    uncertain_slots: list[str] = Field(default_factory=list)
     pending_confirmation: dict | None = None
     question_retries: dict[str, int] = Field(default_factory=dict)
 

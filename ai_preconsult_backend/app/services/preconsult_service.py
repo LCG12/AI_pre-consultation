@@ -42,6 +42,12 @@ RESPIRATORY_RED_FLAG_FIELDS = [
     "slots.red_flags.hemoptysis",
 ]
 
+CONTEXTUAL_BOOL_PREFIXES = (
+    "slots.associated_symptoms.",
+    "slots.red_flags.",
+    "slots.headache.red_flags.",
+)
+
 NEGATIVE_ANSWERS = {"没有", "没", "无", "否", "否认", "没有了", "都没有", "均无", "都无", "全没有", "全部没有", "没有这些", "没有上述", "没这些", "没上述", "不存在"}
 UNCERTAIN_ANSWERS = {"不知道", "不确定", "说不清", "不清楚", "不晓得", "不太清楚"}
 POSITIVE_ANSWERS = {"有", "有的", "有一点", "有一些", "有点", "是", "是的"}
@@ -256,7 +262,7 @@ def handle_message(state: PreconsultState, text: str, asr_confidence: float | No
             recommended_departments=departments,
         ), audit
 
-    uncertain_fields = audit.get("uncertain_fields", [])
+    uncertain_fields = _relevant_uncertain_fields(state_dict, audit.get("uncertain_fields", []))
     if uncertain_fields and not confirmation_handled:
         for field in uncertain_fields:
             value = get_by_path(state_dict, field)
@@ -275,6 +281,29 @@ def handle_message(state: PreconsultState, text: str, asr_confidence: float | No
                     risk_reasons=risk_reasons,
                     recommended_departments=departments,
                 ), audit
+            _mark_slot_uncertain(state_dict, field)
+            _mark_related_slots_uncertain(state_dict, field)
+
+    state_dict["dialogue"]["missing_required_slots"] = missing_required_slots(state_dict)
+
+    if state_dict["dialogue"]["turn_count"] >= state_dict["dialogue"].get("max_turns", 5):
+        patient_report = build_patient_report(risk_level, risk_reasons, departments)
+        state_dict["status"] = "completed"
+        state_dict["dialogue"]["last_question_key"] = None
+        new_state = PreconsultState.model_validate(state_dict)
+        return new_state, PreconsultResponse(
+            session_id=state.session_id,
+            status="completed",
+            reply=patient_report["message"],
+            display_text=patient_report["message"],
+            risk_level=risk_level,
+            risk_reasons=risk_reasons,
+            recommended_action="建议尽快线下就医" if risk_level == "yellow" else "普通门诊或继续观察",
+            recommended_departments=departments,
+            should_stop_dialogue=False,
+            patient_report=patient_report,
+            doctor_summary_status="generating",
+        ), audit
 
     next_question_key = plan_next_question(state_dict)
     if next_question_key:
@@ -377,7 +406,7 @@ def _handle_contextual_answer(text: str, state_dict: dict, audit: dict) -> tuple
 
         if _is_uncertain_answer(normalized):
             for field in RESPIRATORY_RED_FLAG_FIELDS:
-                _append_skipped_slot(state_dict, field)
+                _mark_slot_uncertain(state_dict, field)
             audit["extraction_source"] = "contextual_rule"
             audit["extracted_slots"] = {}
             return True, None
@@ -388,6 +417,86 @@ def _handle_contextual_answer(text: str, state_dict: dict, audit: dict) -> tuple
             audit["extracted_slots"] = {}
             return True, ("具体是哪一种情况：呼吸困难、胸痛，还是咳血？", ["呼吸困难", "胸痛", "咳血"])
 
+    if question_key and "red_flags" in question_key:
+        if _is_negative_answer(normalized):
+            missing = missing_required_slots(state_dict)
+            group = [m for m in missing if "red_flags" in m]
+            extracted = {f: False for f in group} or {question_key: False}
+            for f, v in extracted.items():
+                set_by_path(state_dict, f, v)
+                _mark_related_slots_resolved(state_dict, f, v)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+        if _is_uncertain_answer(normalized):
+            for f in _get_remaining_red_flags(state_dict):
+                _mark_slot_uncertain(state_dict, f)
+                _mark_related_slots_uncertain(state_dict, f)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = {}
+            return True, None
+
+    if question_key in {"slots.medication_history.has_used_medicine", "slots.medication_history.detail"}:
+        if _is_negative_answer(normalized) or any(word in text for word in ["没有用药", "没用药", "没用过药", "没用过任何药", "没吃药", "没有吃药"]):
+            extracted = {
+                "slots.medication_history.has_used_medicine": False,
+            }
+            for field, value in extracted.items():
+                set_by_path(state_dict, field, value)
+            _append_skipped_slot(state_dict, "slots.medication_history.detail")
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+        if _is_uncertain_answer(normalized):
+            _mark_slot_uncertain(state_dict, question_key)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = {}
+            return True, None
+
+    if question_key in {"slots.allergy_history.has_allergy", "slots.allergy_history.detail"}:
+        if _is_negative_answer(normalized) or any(word in text for word in ["没有过敏", "没过敏", "无过敏", "不过敏"]):
+            extracted = {
+                "slots.allergy_history.has_allergy": False,
+            }
+            for field, value in extracted.items():
+                set_by_path(state_dict, field, value)
+            _append_skipped_slot(state_dict, "slots.allergy_history.detail")
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+        if _is_uncertain_answer(normalized):
+            _mark_slot_uncertain(state_dict, question_key)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = {}
+            return True, None
+
+    if _is_contextual_bool_slot(question_key):
+        if _is_negative_answer(normalized):
+            extracted = {question_key: False}
+            set_by_path(state_dict, question_key, False)
+            _mark_related_slots_resolved(state_dict, question_key, False)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+        if normalized in POSITIVE_ANSWERS:
+            extracted = {question_key: True}
+            set_by_path(state_dict, question_key, True)
+            _mark_related_slots_resolved(state_dict, question_key, True)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = extracted
+            return True, None
+
+        if _is_uncertain_answer(normalized):
+            _mark_slot_uncertain(state_dict, question_key)
+            _mark_related_slots_uncertain(state_dict, question_key)
+            audit["extraction_source"] = "contextual_rule"
+            audit["extracted_slots"] = {}
+            return True, None
+
     if question_key == "slots.cough.cough_type":
         extracted = _extract_contextual_cough_answer(text, normalized)
         if extracted is not None:
@@ -395,12 +504,27 @@ def _handle_contextual_answer(text: str, state_dict: dict, audit: dict) -> tuple
                 for field, value in extracted.items():
                     set_by_path(state_dict, field, value)
             else:
-                _append_skipped_slot(state_dict, question_key)
+                _mark_slot_uncertain(state_dict, question_key)
             audit["extraction_source"] = "contextual_rule"
             audit["extracted_slots"] = extracted
             return True, None
 
+    if question_key and _is_uncertain_answer(normalized):
+        _mark_slot_uncertain(state_dict, question_key)
+        _mark_related_slots_uncertain(state_dict, question_key)
+        audit["extraction_source"] = "contextual_rule"
+        audit["extracted_slots"] = {}
+        return True, None
+
     return False, None
+
+
+def _get_remaining_red_flags(state_dict: dict) -> list[str]:
+    return [m for m in missing_required_slots(state_dict) if "red_flags" in m]
+
+
+def _is_contextual_bool_slot(question_key: str | None) -> bool:
+    return bool(question_key and question_key.startswith(CONTEXTUAL_BOOL_PREFIXES))
 
 
 def _extract_contextual_cough_answer(text: str, normalized: str) -> dict[str, Any] | None:
@@ -473,10 +597,43 @@ def _is_uncertain_answer(normalized: str) -> bool:
     return normalized in UNCERTAIN_ANSWERS
 
 
+def _relevant_uncertain_fields(state_dict: dict, uncertain_fields: list[Any]) -> list[str]:
+    fields = [field for field in uncertain_fields if isinstance(field, str) and not field.startswith("_")]
+    question_key = state_dict.get("dialogue", {}).get("last_question_key")
+    if question_key and question_key in fields:
+        return [question_key]
+    if question_key and question_key.startswith("_confirm_"):
+        confirmed_field = question_key.removeprefix("_confirm_")
+        return [confirmed_field] if confirmed_field in fields else []
+    missing = set(state_dict.get("dialogue", {}).get("missing_required_slots", []))
+    return [field for field in fields if field in missing]
+
+
 def _append_skipped_slot(state_dict: dict, slot_key: str) -> None:
     skipped = state_dict["dialogue"].setdefault("skipped_slots", [])
     if slot_key not in skipped:
         skipped.append(slot_key)
+
+
+def _mark_slot_uncertain(state_dict: dict, slot_key: str) -> None:
+    _append_skipped_slot(state_dict, slot_key)
+    uncertain = state_dict["dialogue"].setdefault("uncertain_slots", [])
+    if slot_key not in uncertain:
+        uncertain.append(slot_key)
+
+
+def _mark_related_slots_uncertain(state_dict: dict, slot_key: str) -> None:
+    if slot_key == "slots.headache.red_flags.thunderclap_onset":
+        _mark_slot_uncertain(state_dict, "slots.headache.onset_speed")
+    elif slot_key == "slots.headache.onset_speed":
+        _mark_slot_uncertain(state_dict, "slots.headache.red_flags.thunderclap_onset")
+
+
+def _mark_related_slots_resolved(state_dict: dict, slot_key: str, value: Any) -> None:
+    if slot_key == "slots.headache.red_flags.thunderclap_onset":
+        set_by_path(state_dict, "slots.headache.onset_speed", "sudden" if value else "gradual")
+    elif slot_key == "slots.headache.onset_speed" and value == "sudden":
+        set_by_path(state_dict, "slots.headache.red_flags.thunderclap_onset", True)
 
 
 def _mark_question_skipped(state_dict: dict, question_key: str) -> None:
@@ -551,7 +708,8 @@ def _handle_confirmation_response(text: str, state_dict: dict, audit: dict) -> b
         return True
 
     if normalized in {"不知道", "不确定", "说不清", "不清楚"}:
-        state_dict["dialogue"]["skipped_slots"].append(field)
+        _mark_slot_uncertain(state_dict, field)
+        _mark_related_slots_uncertain(state_dict, field)
         return True
 
     # Not a direct confirm/deny — treat as normal answer, fall through to extraction
